@@ -58,26 +58,46 @@ Provide:
   return JSON.parse(response.text);
 }
 
-async function fetchPexelsImageBuffer(query, index) {
-  const url = `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=5&orientation=portrait`;
+async function fetchUnsplashImageBuffer(query, index) {
+  const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
+    query
+  )}&per_page=5&orientation=portrait`;
+
   const res = await fetch(url, {
-    headers: { Authorization: process.env.PEXELS_API_KEY },
+    headers: {
+      Authorization: `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`,
+    },
   });
 
   if (!res.ok) {
-    throw new Error(`Pexels request failed (${res.status}) for query "${query}"`);
+    throw new Error(`Unsplash request failed (${res.status}) for query "${query}"`);
   }
 
   const data = await res.json();
-  const photo = data.photos?.[index % (data.photos?.length || 1)] || data.photos?.[0];
-  if (!photo?.src?.large2x) {
-    throw new Error(`No Pexels photo found for "${query}"`);
+  const results = data.results || [];
+  const photo = results[index % (results.length || 1)] || results[0];
+
+  const imageUrl = photo?.urls?.regular || photo?.urls?.full;
+  if (!imageUrl) {
+    throw new Error(`No Unsplash photo found for "${query}"`);
   }
 
-  const imgRes = await fetch(photo.src.large2x);
+  // Notify Unsplash download endpoint per API guidelines when selecting a photo
+  if (photo.links?.download_location) {
+    await fetch(photo.links.download_location, {
+      headers: {
+        Authorization: `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`,
+      },
+    }).catch(() => {});
+  }
+
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) {
+    throw new Error(`Failed to download Unsplash image (${imgRes.status})`);
+  }
+
   return Buffer.from(await imgRes.arrayBuffer());
 }
-
 function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
   const words = text.split(/\s+/);
   const lines = [];
