@@ -1,0 +1,13 @@
+{
+  "name": "ig-carousel-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@google/genai": "^0.11.0",
+    "@napi-rs/canvas": "^0.1.57",
+    "googleapis": "^144.0.0"
+  }
+}
