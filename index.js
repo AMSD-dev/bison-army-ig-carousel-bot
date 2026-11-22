@@ -7,12 +7,33 @@ import { google } from "googleapis";
 const WIDTH = 1080;
 const HEIGHT = 1350;
 
+const BISON_ARMY_TOPICS = [
+  "Why Motivation Fails",
+  "How to Build Workout Discipline in 30 Days",
+  "Why Most People Quit Their Fitness Goals",
+  "The Power of Static Holds",
+  "The Psychology of Workout Streaks",
+  "How Long Does It Really Take to Build an Exercise Habit?",
+  "What Happens When You Exercise for 15 Minutes Every Day?",
+  "Never Miss Twice",
+  "Why Calisthenics Builds Real-World Strength",
+  "The Difference Between Training for Appearance and Performance",
+  "Why Consistency Beats Intensity",
+  "The Science of Daily Movement",
+  "Why Stabilizer Muscles Matter More Than You Think",
+  "The Identity Shift",
+  "The Beginner's Guide to Calisthenics",
+];
+
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY?.trim() });
 
 function readHistory() {
   const filePath = path.resolve("history.json");
   if (!fs.existsSync(filePath)) return { usedTopics: [] };
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  return {
+    usedTopics: Array.isArray(parsed.usedTopics) ? parsed.usedTopics : [],
+  };
 }
 
 function saveHistory(data) {
@@ -22,18 +43,42 @@ function saveHistory(data) {
   );
 }
 
+function pickNextTopic(usedTopics) {
+  const usedSet = new Set(
+    usedTopics.map((t) => String(t).trim().toLowerCase())
+  );
+  const remaining = BISON_ARMY_TOPICS.filter(
+    (topic) => !usedSet.has(topic.toLowerCase())
+  );
+
+  // Once all 15 articles have been used, reset the cycle cleanly
+  const pool = remaining.length > 0 ? remaining : BISON_ARMY_TOPICS;
+  const cycleReset = remaining.length === 0;
+
+  return {
+    topic: pool[0],
+    cycleReset,
+  };
+}
+
 async function generateCarouselPlan(usedTopics) {
-  const recentTopics = usedTopics.slice(-50).join(" | ") || "None";
+  const { topic: selectedTopic, cycleReset } = pickNextTopic(usedTopics);
   const models = ["gemini-3.5-flash-lite", "gemini-3.6-flash"];
   const attemptsPerModel = 2;
 
-  const prompt = `Create a 5-slide Instagram carousel on a fresh, engaging topic that is NOT in this already-used list: ${recentTopics}.
-Provide:
-1. "topic": short title of the topic
-2. "caption": social media caption with 5-8 relevant hashtags at the end
-3. "slides": an array of EXACTLY 5 objects, each with:
-   - "overlay_text": punchy overlay text (max ~18 words) to place on that slide
-   - "photo_query": a clean 2-3 word stock photo search query (no text or watermarks)`;
+  const prompt = `You are the Content Strategist for Bison Army (bisonarmy.ca), a fitness and discipline platform focused on calisthenics, habit formation, workout consistency, identity building, psychology, and long-term health.
+Core concepts to weave in naturally where fitting: Daily Missions, Workout Streaks, Discipline, Identity Building, Calisthenics, and 15-Minute Workouts.
+
+Use this exact selected article topic: "${selectedTopic}"
+
+Generate a 5-slide Instagram carousel package matching Bison Army's voice:
+1. "topic": must be "${selectedTopic}"
+2. "label": a short, punchy headline/hook (3-8 words) that sparks curiosity
+3. "caption": 100-150 words, conversational tone, motivational yet evidence-based, Grade 6-8 reading level, mentions Bison Army naturally, includes a call-to-action to read the full article on Bison Army, and ends with a single engaging question
+4. "hashtags": array of EXACTLY 5 strings, always including "#bisonarmy" plus 4 relevant tags (each starting with "#")
+5. "slides": array of EXACTLY 5 objects (progressive lesson from Slide 1 to Slide 5, ending with a strong takeaway on Slide 5), each with:
+  - "overlay_text": short title + 1-2 short sentences (keep it concise so it fits cleanly on a 1080x1350 slide, roughly 12-24 words total)
+  - "photo_query": a clean 2-3 word stock photo search query (calisthenics, bodyweight training, gym, outdoor workout, focus, or discipline; no text or watermarks)`;
 
   const schemaConfig = {
     responseMimeType: "application/json",
@@ -41,7 +86,12 @@ Provide:
       type: Type.OBJECT,
       properties: {
         topic: { type: Type.STRING },
+        label: { type: Type.STRING },
         caption: { type: Type.STRING },
+        hashtags: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
         slides: {
           type: Type.ARRAY,
           items: {
@@ -54,7 +104,7 @@ Provide:
           },
         },
       },
-      required: ["topic", "caption", "slides"],
+      required: ["topic", "label", "caption", "hashtags", "slides"],
     },
   };
 
@@ -72,7 +122,26 @@ Provide:
           },
         });
 
-        return JSON.parse(response.text);
+        const parsed = JSON.parse(response.text);
+        const normalizedTags = Array.isArray(parsed.hashtags)
+          ? parsed.hashtags
+              .map((tag) => {
+                const clean = String(tag).trim().replace(/^#+/, "");
+                return clean ? `#${clean}` : null;
+              })
+              .filter(Boolean)
+          : [];
+
+        if (!normalizedTags.some((t) => t.toLowerCase() === "#bisonarmy")) {
+          normalizedTags.unshift("#bisonarmy");
+        }
+
+        return {
+          ...parsed,
+          topic: selectedTopic,
+          cycleReset,
+          hashtags: normalizedTags.slice(0, 5),
+        };
       } catch (err) {
         lastError = err;
         const msg = err?.message || String(err);
@@ -213,9 +282,9 @@ async function renderSlidePng(photoBuffer, overlayText, slideNum, totalSlides) {
 
   // Main overlay text centered
   ctx.fillStyle = "#FFFFFF";
-  ctx.font = "bold 54px sans-serif";
+  ctx.font = "bold 50px sans-serif";
   ctx.textAlign = "center";
-  drawWrappedText(ctx, overlayText, WIDTH / 2, HEIGHT / 2, WIDTH - 140, 72);
+  drawWrappedText(ctx, overlayText, WIDTH / 2, HEIGHT / 2, WIDTH - 140, 68);
 
   return canvas.toBuffer("image/png");
 }
@@ -300,10 +369,13 @@ async function main() {
     uploadedFiles.push({ filePath: outFile, mimeType: "image/png" });
   }
 
+  const hashtagLine = plan.hashtags.join(" ");
+  const fullCaption = `${plan.caption}\n\n${hashtagLine}`;
+
   const captionFile = path.join(localDir, "caption.txt");
   fs.writeFileSync(
     captionFile,
-    `Topic: ${plan.topic}\n\n${plan.caption}\n\nPhoto Credits:\n${photoCredits.join(
+    `Topic: ${plan.topic}\nLabel: ${plan.label || ""}\n\n${fullCaption}\n\nPhoto Credits:\n${photoCredits.join(
       "\n"
     )}\n\nSlide Texts:\n${slides
       .map((s, idx) => `${idx + 1}. ${s.overlay_text}`)
@@ -322,7 +394,10 @@ async function main() {
     await uploadFileToDrive(drive, item.filePath, item.mimeType, subfolderId);
   }
 
-  history.usedTopics.push(plan.topic);
+  // Start a fresh history cycle if all 15 topics were already used
+  history.usedTopics = plan.cycleReset
+    ? [plan.topic]
+    : [...history.usedTopics, plan.topic];
   saveHistory(history);
 
   console.log(
