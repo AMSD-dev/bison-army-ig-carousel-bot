@@ -221,24 +221,20 @@ async function renderSlidePng(photoBuffer, overlayText, slideNum, totalSlides) {
 }
 
 function getDriveClient() {
-  const rawJson = process.env.GDRIVE_SERVICE_ACCOUNT_JSON?.trim();
-  if (!rawJson) {
-    throw new Error("Missing GDRIVE_SERVICE_ACCOUNT_JSON environment variable.");
+  const clientId = process.env.GDRIVE_CLIENT_ID?.trim();
+  const clientSecret = process.env.GDRIVE_CLIENT_SECRET?.trim();
+  const refreshToken = process.env.GDRIVE_REFRESH_TOKEN?.trim();
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error(
+      "Missing GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, or GDRIVE_REFRESH_TOKEN."
+    );
   }
 
-  let creds = JSON.parse(rawJson);
-  if (typeof creds === "string") {
-    creds = JSON.parse(creds);
-  }
-  if (typeof creds.private_key === "string") {
-    creds.private_key = creds.private_key.replace(/\\n/g, "\n");
-  }
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret);
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
 
-  const auth = new google.auth.GoogleAuth({
-    credentials: creds,
-    scopes: ["https://www.googleapis.com/auth/drive"],
-  });
-  return google.drive({ version: "v3", auth });
+  return google.drive({ version: "v3", auth: oauth2Client });
 }
 
 async function createDriveSubfolder(drive, parentId, folderName) {
