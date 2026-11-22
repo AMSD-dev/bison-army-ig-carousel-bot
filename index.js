@@ -23,8 +23,22 @@ const BISON_ARMY_TOPICS = [
   "Why Stabilizer Muscles Matter More Than You Think",
   "The Identity Shift",
   "The Beginner's Guide to Calisthenics",
+  "Why Discipline Beats Willpower Every Time",
+  "How to Build a 15-Minute Daily Movement Habit",
+  "The Truth About Static Holds and Tendon Strength",
+  "Why You Don't Need a Gym for Real Strength",
+  "How to Bounce Back After Breaking a Workout Streak",
+  "Training for Longevity vs. Short-Term Burnout",
+  "What Happens When You Train Before Checking Your Phone",
+  "Why Boring Basics Outperform Fancy Workouts",
+  "How to Stop Negotiating With Yourself on Tough Days",
+  "The Role of Core Tension in Every Bodyweight Move",
+  "Why Show-Up Days Matter More Than PR Days",
+  "How Identity Shapes What You Do When Nobody Is Watching",
+  "Mastering Push, Pull, and Hinge With Bodyweight",
+  "Why Consistency Feels Slow Until Suddenly It Isn't",
+  "Building a Routine You Can Keep When Life Gets Busy",
 ];
-
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY?.trim() });
 
 function readHistory() {
