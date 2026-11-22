@@ -23,7 +23,7 @@ async function generateCarouselPlan(usedTopics) {
   const recentTopics = usedTopics.slice(-50).join(" | ") || "None";
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.8-flash",
     contents: `Create a 5-slide Instagram carousel on a fresh, engaging topic that is NOT in this already-used list: ${recentTopics}.
 Provide:
 1. "topic": short title of the topic
