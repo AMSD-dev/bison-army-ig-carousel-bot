@@ -123,7 +123,7 @@ async function fetchUnsplashPhoto(query, index) {
     throw new Error(`No Unsplash photo found for "${query}"`);
   }
 
-  // Trigger Unsplash download tracking endpoint per API guidelines
+  // Trigger Unsplash download tracking endpoint per  guidelines
   if (photo.links?.download_location) {
     await fetch(photo.links.download_location, {
       headers: {
@@ -213,7 +213,7 @@ function getDriveClient() {
   const creds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT_JSON);
   const auth = new google.auth.GoogleAuth({
     credentials: creds,
-    scopes: ["https://www.googleapis.com/auth/drive"],
+    scopes: ["https://www.googles.com/auth/drive"],
   });
   return google.drive({ version: "v3", auth });
 }
