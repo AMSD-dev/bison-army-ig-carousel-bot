@@ -21,57 +21,73 @@ function saveHistory(data) {
 
 async function generateCarouselPlan(usedTopics) {
   const recentTopics = usedTopics.slice(-50).join(" | ") || "None";
-  const maxAttempts = 3;
+  const models = ["gemini-3.8-flash", "gemini-2.5-flash"];
+  const attemptsPerModel = 2;
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const response = await ai.models.generateContent({
-        model: "gemini-3.8-flash",
-        contents: `Create a 5-slide Instagram carousel on a fresh, engaging topic that is NOT in this already-used list: ${recentTopics}.
+  const prompt = `Create a 5-slide Instagram carousel on a fresh, engaging topic that is NOT in this already-used list: ${recentTopics}.
 Provide:
 1. "topic": short title of the topic
 2. "caption": social media caption with 5-8 relevant hashtags at the end
 3. "slides": an array of EXACTLY 5 objects, each with:
    - "overlay_text": punchy overlay text (max ~18 words) to place on that slide
-   - "photo_query": a clean 2-3 word stock photo search query (no text or watermarks)`,
-        config: {
-          abortSignal: AbortSignal.timeout(30000),
-          responseMimeType: "application/json",
-          responseSchema: {
+   - "photo_query": a clean 2-3 word stock photo search query (no text or watermarks)`;
+
+  const schemaConfig = {
+    responseMimeType: "application/json",
+    responseSchema: {
+      type: Type.OBJECT,
+      properties: {
+        topic: { type: Type.STRING },
+        caption: { type: Type.STRING },
+        slides: {
+          type: Type.ARRAY,
+          items: {
             type: Type.OBJECT,
             properties: {
-              topic: { type: Type.STRING },
-              caption: { type: Type.STRING },
-              slides: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    overlay_text: { type: Type.STRING },
-                    photo_query: { type: Type.STRING },
-                  },
-                  required: ["overlay_text", "photo_query"],
-                },
-              },
+              overlay_text: { type: Type.STRING },
+              photo_query: { type: Type.STRING },
             },
-            required: ["topic", "caption", "slides"],
+            required: ["overlay_text", "photo_query"],
           },
         },
-      });
+      },
+      required: ["topic", "caption", "slides"],
+    },
+  };
 
-      return JSON.parse(response.text);
-    } catch (err) {
-      const causeCode = err?.cause?.code || err?.cause?.message || err?.message;
-      console.warn(
-        `Gemini attempt ${attempt}/${maxAttempts} failed (${causeCode})`
-      );
-      if (attempt === maxAttempts) {
-        throw err;
+  let lastError;
+
+  for (const model of models) {
+    for (let attempt = 1; attempt <= attemptsPerModel; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            ...schemaConfig,
+            abortSignal: AbortSignal.timeout(45000),
+          },
+        });
+
+        return JSON.parse(response.text);
+      } catch (err) {
+        lastError = err;
+        const status = err?.status || err?.code || "";
+        const msg = err?.message || String(err);
+        console.warn(
+          `[${model}] attempt ${attempt}/${attemptsPerModel} failed (${status}): ${msg}`
+        );
+
+        // Wait a bit longer before retrying on 503 / transient errors
+        const waitMs = 4000 * attempt + Math.floor(Math.random() * 1500);
+        await new Promise((r) => setTimeout(r, waitMs));
       }
-      await new Promise((r) => setTimeout(r, 2000 * attempt));
     }
   }
+
+  throw lastError;
 }
+
 function appendUtmParams(rawUrl, appName = "ig-carousel-bot") {
   if (!rawUrl) return "https://unsplash.com";
   const sep = rawUrl.includes("?") ? "&" : "?";
