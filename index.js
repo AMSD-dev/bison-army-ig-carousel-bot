@@ -1,11 +1,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { GoogleGenAI, Type } from "@google/genai";
-import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts, loadImage } from "@napi-rs/canvas";
 import { google } from "googleapis";
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
+const FONT_PATH = path.resolve("assets/rajdhani-v17-latin-600.woff2");
+const FONT_FAMILY = fs.existsSync(FONT_PATH)
+  ? GlobalFonts.registerFromPath(FONT_PATH, "BisonFont") || "BisonFont"
+  : "sans-serif";
 
 const BISON_ARMY_TOPICS = [
   "Why Motivation Fails",
