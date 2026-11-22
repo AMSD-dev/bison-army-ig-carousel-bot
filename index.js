@@ -6,10 +6,16 @@ import { google } from "googleapis";
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
-const FONT_PATH = path.resolve("assets/rajdhani-v17-latin-600.woff2");
-const FONT_FAMILY = fs.existsSync(FONT_PATH)
-  ? GlobalFonts.registerFromPath(FONT_PATH, "BisonFont") || "BisonFont"
-  : "sans-serif";
+const FONT_FILE = path.resolve("assets/rajdhani-v17-latin-600.woff2");
+const FONT_EXISTS = fs.existsSync(FONT_FILE);
+const REGISTERED_FAMILY = FONT_EXISTS
+  ? GlobalFonts.registerFromPath(FONT_FILE, "Rajdhani")
+  : null;
+const FONT_FAMILY =
+  (typeof REGISTERED_FAMILY === "string" && REGISTERED_FAMILY) ||
+  (FONT_EXISTS ? "Rajdhani" : "sans-serif");
+
+console.log("Rajdhani font exists:", FONT_EXISTS, "family:", FONT_FAMILY);
 
 const BISON_ARMY_TOPICS = [
   "Why Motivation Fails",
@@ -275,7 +281,6 @@ async function renderSlidePng(photoBuffer, overlayText, slideNum, totalSlides) {
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext("2d");
 
-  // Cover-fit background photo into 1080x1350
   const img = await loadImage(photoBuffer);
   const scale = Math.max(WIDTH / img.width, HEIGHT / img.height);
   const drawW = img.width * scale;
@@ -284,29 +289,33 @@ async function renderSlidePng(photoBuffer, overlayText, slideNum, totalSlides) {
   const drawY = (HEIGHT - drawH) / 2;
   ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
-  // Dark gradient overlay so white text stays readable
+  // Dark gradient over the photo
   const grad = ctx.createLinearGradient(0, 0, 0, HEIGHT);
-  grad.addColorStop(0, "rgba(0, 0, 0, 0.35)");
-  grad.addColorStop(0.5, "rgba(0, 0, 0, 0.55)");
-  grad.addColorStop(1, "rgba(0, 0, 0, 0.65)");
+  grad.addColorStop(0, "rgba(0, 0, 0, 0.45)");
+  grad.addColorStop(0.5, "rgba(0, 0, 0, 0.6)");
+  grad.addColorStop(1, "rgba(0, 0, 0, 0.7)");
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  // Slide counter pill at top
-  ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
-  ctx.font = "bold 28px sans-serif";
+  // Backing box behind main text for strong contrast
+  ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+  ctx.fillRect(70, HEIGHT / 2 - 220, WIDTH - 140, 440);
+
+  // Slide counter at top (weight 600 to match the woff2 file)
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = `600 28px "${FONT_FAMILY}", sans-serif`;
   ctx.textAlign = "center";
   ctx.fillText(`SLIDE ${slideNum} / ${totalSlides}`, WIDTH / 2, 110);
 
-  // Main overlay text centered
+  // Main overlay text centered (weight 600 to match the woff2 file)
+  const safeText = String(overlayText || "").trim() || "Bison Army";
   ctx.fillStyle = "#FFFFFF";
-  ctx.font = "bold 50px sans-serif";
+  ctx.font = `600 48px "${FONT_FAMILY}", sans-serif`;
   ctx.textAlign = "center";
-  drawWrappedText(ctx, overlayText, WIDTH / 2, HEIGHT / 2, WIDTH - 140, 68);
+  drawWrappedText(ctx, safeText, WIDTH / 2, HEIGHT / 2, WIDTH - 200, 64);
 
   return canvas.toBuffer("image/png");
 }
-
 function getDriveClient() {
   const clientId = process.env.GDRIVE_CLIENT_ID?.trim();
   const clientSecret = process.env.GDRIVE_CLIENT_SECRET?.trim();
