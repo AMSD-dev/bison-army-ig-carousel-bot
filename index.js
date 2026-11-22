@@ -58,7 +58,15 @@ Provide:
   return JSON.parse(response.text);
 }
 
-async function fetchUnsplashImageBuffer(query, index) {
+function appendUtmParams(rawUrl, appName = "ig-carousel-bot") {
+  if (!rawUrl) return "https://unsplash.com";
+  const sep = rawUrl.includes("?") ? "&" : "?";
+  return `${rawUrl}${sep}utm_source=${encodeURIComponent(
+    appName
+  )}&utm_medium=referral`;
+}
+
+async function fetchUnsplashPhoto(query, index) {
   const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
     query
   )}&per_page=5&orientation=portrait`;
@@ -82,7 +90,7 @@ async function fetchUnsplashImageBuffer(query, index) {
     throw new Error(`No Unsplash photo found for "${query}"`);
   }
 
-  // Notify Unsplash download endpoint per API guidelines when selecting a photo
+  // Trigger Unsplash download tracking endpoint per API guidelines
   if (photo.links?.download_location) {
     await fetch(photo.links.download_location, {
       headers: {
@@ -96,8 +104,17 @@ async function fetchUnsplashImageBuffer(query, index) {
     throw new Error(`Failed to download Unsplash image (${imgRes.status})`);
   }
 
-  return Buffer.from(await imgRes.arrayBuffer());
+  const photographerName = photo.user?.name || "Unsplash Photographer";
+  const profileUrl = appendUtmParams(
+    photo.user?.links?.html || "https://unsplash.com"
+  );
+
+  return {
+    buffer: Buffer.from(await imgRes.arrayBuffer()),
+    creditLine: `Slide ${index + 1}: Photo by ${photographerName} on Unsplash (${profileUrl})`,
+  };
 }
+
 function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
   const words = text.split(/\s+/);
   const lines = [];
@@ -205,11 +222,22 @@ async function main() {
   fs.mkdirSync(localDir, { recursive: true });
 
   const uploadedFiles = [];
+  const photoCredits = [];
 
   for (let i = 0; i < slides.length; i++) {
     const slideNum = i + 1;
-    const photoBuf = await fetchPexelsImageBuffer(slides[i].photo_query, i);
-    const pngBuf = await renderSlidePng(photoBuf, slides[i].overlay_text, slideNum, slides.length);
+    const { buffer: photoBuf, creditLine } = await fetchUnsplashPhoto(
+      slides[i].photo_query,
+      i
+    );
+    photoCredits.push(creditLine);
+
+    const pngBuf = await renderSlidePng(
+      photoBuf,
+      slides[i].overlay_text,
+      slideNum,
+      slides.length
+    );
     const outFile = path.join(localDir, `slide-${slideNum}.png`);
     fs.writeFileSync(outFile, pngBuf);
     uploadedFiles.push({ filePath: outFile, mimeType: "image/png" });
@@ -218,7 +246,9 @@ async function main() {
   const captionFile = path.join(localDir, "caption.txt");
   fs.writeFileSync(
     captionFile,
-    `Topic: ${plan.topic}\n\n${plan.caption}\n\nSlide Texts:\n${slides
+    `Topic: ${plan.topic}\n\n${plan.caption}\n\nPhoto Credits:\n${photoCredits.join(
+      "\n"
+    )}\n\nSlide Texts:\n${slides
       .map((s, idx) => `${idx + 1}. ${s.overlay_text}`)
       .join("\n")}\n`
   );
