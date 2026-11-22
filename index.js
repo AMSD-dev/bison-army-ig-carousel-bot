@@ -7,7 +7,7 @@ import { google } from "googleapis";
 const WIDTH = 1080;
 const HEIGHT = 1350;
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY?.trim() });
 
 function readHistory() {
   const filePath = path.resolve("history.json");
@@ -16,7 +16,10 @@ function readHistory() {
 }
 
 function saveHistory(data) {
-  fs.writeFileSync(path.resolve("history.json"), JSON.stringify(data, null, 2) + "\n");
+  fs.writeFileSync(
+    path.resolve("history.json"),
+    JSON.stringify(data, null, 2) + "\n"
+  );
 }
 
 async function generateCarouselPlan(usedTopics) {
@@ -100,18 +103,26 @@ function appendUtmParams(rawUrl, appName = "ig-carousel-bot") {
 }
 
 async function fetchUnsplashPhoto(query, index) {
+  const accessKey = process.env.UNSPLASH_ACCESS_KEY?.trim();
+  if (!accessKey) {
+    throw new Error("Missing UNSPLASH_ACCESS_KEY environment variable.");
+  }
+
   const url = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
     query
   )}&per_page=5&orientation=portrait`;
 
   const res = await fetch(url, {
     headers: {
-      Authorization: `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`,
+      Authorization: `Client-ID ${accessKey}`,
     },
   });
 
   if (!res.ok) {
-    throw new Error(`Unsplash request failed (${res.status}) for query "${query}"`);
+    const errBody = await res.text().catch(() => "");
+    throw new Error(
+      `Unsplash request failed (${res.status}) for query "${query}": ${errBody}`
+    );
   }
 
   const data = await res.json();
@@ -123,11 +134,11 @@ async function fetchUnsplashPhoto(query, index) {
     throw new Error(`No Unsplash photo found for "${query}"`);
   }
 
-  // Trigger Unsplash download tracking endpoint per  guidelines
+  // Trigger Unsplash download tracking endpoint per API guidelines
   if (photo.links?.download_location) {
     await fetch(photo.links.download_location, {
       headers: {
-        Authorization: `Client-ID ${process.env.UNSPLASH_ACCESS_KEY}`,
+        Authorization: `Client-ID ${accessKey}`,
       },
     }).catch(() => {});
   }
@@ -210,10 +221,22 @@ async function renderSlidePng(photoBuffer, overlayText, slideNum, totalSlides) {
 }
 
 function getDriveClient() {
-  const creds = JSON.parse(process.env.GDRIVE_SERVICE_ACCOUNT_JSON);
+  const rawJson = process.env.GDRIVE_SERVICE_ACCOUNT_JSON?.trim();
+  if (!rawJson) {
+    throw new Error("Missing GDRIVE_SERVICE_ACCOUNT_JSON environment variable.");
+  }
+
+  let creds = JSON.parse(rawJson);
+  if (typeof creds === "string") {
+    creds = JSON.parse(creds);
+  }
+  if (typeof creds.private_key === "string") {
+    creds.private_key = creds.private_key.replace(/\\n/g, "\n");
+  }
+
   const auth = new google.auth.GoogleAuth({
     credentials: creds,
-    scopes: ["https://www.googles.com/auth/drive"],
+    scopes: ["https://www.googleapis.com/auth/drive"],
   });
   return google.drive({ version: "v3", auth });
 }
@@ -246,6 +269,11 @@ async function uploadFileToDrive(drive, filePath, mimeType, folderId) {
 }
 
 async function main() {
+  const folderId = process.env.GDRIVE_FOLDER_ID?.trim();
+  if (!folderId) {
+    throw new Error("Missing GDRIVE_FOLDER_ID environment variable.");
+  }
+
   const history = readHistory();
   const plan = await generateCarouselPlan(history.usedTopics);
   const slides = plan.slides.slice(0, 5);
@@ -290,7 +318,7 @@ async function main() {
   const drive = getDriveClient();
   const subfolderId = await createDriveSubfolder(
     drive,
-    process.env.GDRIVE_FOLDER_ID,
+    folderId,
     `${dateTag} - ${plan.topic.slice(0, 40)}`
   );
 
@@ -301,7 +329,9 @@ async function main() {
   history.usedTopics.push(plan.topic);
   saveHistory(history);
 
-  console.log(`Uploaded carousel for topic "${plan.topic}" to Google Drive folder ${subfolderId}.`);
+  console.log(
+    `Uploaded carousel for topic "${plan.topic}" to Google Drive folder ${subfolderId}.`
+  );
 }
 
 main().catch((err) => {
