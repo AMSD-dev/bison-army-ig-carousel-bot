@@ -21,7 +21,7 @@ function saveHistory(data) {
 
 async function generateCarouselPlan(usedTopics) {
   const recentTopics = usedTopics.slice(-50).join(" | ") || "None";
-  const models = ["gemini-3.8-flash", "gemini-2.5-flash"];
+  const models = ["gemini-3.5-flash-lite", "gemini-3.6-flash"];
   const attemptsPerModel = 2;
 
   const prompt = `Create a 5-slide Instagram carousel on a fresh, engaging topic that is NOT in this already-used list: ${recentTopics}.
@@ -65,21 +65,24 @@ Provide:
           contents: prompt,
           config: {
             ...schemaConfig,
-            abortSignal: AbortSignal.timeout(45000),
+            abortSignal: AbortSignal.timeout(30000),
           },
         });
 
         return JSON.parse(response.text);
       } catch (err) {
         lastError = err;
-        const status = err?.status || err?.code || "";
         const msg = err?.message || String(err);
         console.warn(
-          `[${model}] attempt ${attempt}/${attemptsPerModel} failed (${status}): ${msg}`
+          `[${model}] attempt ${attempt}/${attemptsPerModel} failed: ${msg}`
         );
 
-        // Wait a bit longer before retrying on 503 / transient errors
-        const waitMs = 4000 * attempt + Math.floor(Math.random() * 1500);
+        // No point retrying the same model if it isn't available (404)
+        if (msg.includes("404")) {
+          break;
+        }
+
+        const waitMs = 3000 * attempt + Math.floor(Math.random() * 1000);
         await new Promise((r) => setTimeout(r, waitMs));
       }
     }
