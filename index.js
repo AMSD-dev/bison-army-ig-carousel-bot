@@ -301,12 +301,6 @@ async function renderSlidePng(photoBuffer, overlayText, slideNum, totalSlides) {
   ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
   ctx.fillRect(70, HEIGHT / 2 - 220, WIDTH - 140, 440);
 
-  // Slide counter at top (weight 600 to match the woff2 file)
-  ctx.fillStyle = "#FFFFFF";
-  ctx.font = `600 28px "${FONT_FAMILY}", sans-serif`;
-  ctx.textAlign = "center";
-  ctx.fillText(`SLIDE ${slideNum} / ${totalSlides}`, WIDTH / 2, 110);
-
   // Main overlay text centered (weight 600 to match the woff2 file)
   const safeText = String(overlayText || "").trim() || "Bison Army";
   ctx.fillStyle = "#FFFFFF";
