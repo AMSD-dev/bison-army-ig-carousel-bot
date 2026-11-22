@@ -21,43 +21,57 @@ function saveHistory(data) {
 
 async function generateCarouselPlan(usedTopics) {
   const recentTopics = usedTopics.slice(-50).join(" | ") || "None";
+  const maxAttempts = 3;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3.8-flash",
-    contents: `Create a 5-slide Instagram carousel on a fresh, engaging topic that is NOT in this already-used list: ${recentTopics}.
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents: `Create a 5-slide Instagram carousel on a fresh, engaging topic that is NOT in this already-used list: ${recentTopics}.
 Provide:
 1. "topic": short title of the topic
 2. "caption": social media caption with 5-8 relevant hashtags at the end
 3. "slides": an array of EXACTLY 5 objects, each with:
    - "overlay_text": punchy overlay text (max ~18 words) to place on that slide
    - "photo_query": a clean 2-3 word stock photo search query (no text or watermarks)`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          topic: { type: Type.STRING },
-          caption: { type: Type.STRING },
-          slides: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                overlay_text: { type: Type.STRING },
-                photo_query: { type: Type.STRING },
+        config: {
+          abortSignal: AbortSignal.timeout(30000),
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              topic: { type: Type.STRING },
+              caption: { type: Type.STRING },
+              slides: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    overlay_text: { type: Type.STRING },
+                    photo_query: { type: Type.STRING },
+                  },
+                  required: ["overlay_text", "photo_query"],
+                },
               },
-              required: ["overlay_text", "photo_query"],
             },
+            required: ["topic", "caption", "slides"],
           },
         },
-        required: ["topic", "caption", "slides"],
-      },
-    },
-  });
+      });
 
-  return JSON.parse(response.text);
+      return JSON.parse(response.text);
+    } catch (err) {
+      const causeCode = err?.cause?.code || err?.cause?.message || err?.message;
+      console.warn(
+        `Gemini attempt ${attempt}/${maxAttempts} failed (${causeCode})`
+      );
+      if (attempt === maxAttempts) {
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, 2000 * attempt));
+    }
+  }
 }
-
 function appendUtmParams(rawUrl, appName = "ig-carousel-bot") {
   if (!rawUrl) return "https://unsplash.com";
   const sep = rawUrl.includes("?") ? "&" : "?";
